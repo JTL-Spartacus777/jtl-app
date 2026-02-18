@@ -5,6 +5,21 @@ from oauth2client.service_account import ServiceAccountCredentials
 import random
 import time
 
+# --- FULL GHOST MODE: HIDE ALL BRANDING, GITHUB, AND FOOTERS ---
+hide_elements = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden !important;}
+    [data-testid="stDecoration"] {display: none;}
+    [data-testid="stStatusWidget"] {display: none;}
+    #root > div:nth-child(1) > div > div > div > div > section > div {padding-top: 0rem;}
+    .stAppViewFooter {display: none !important;}
+    </style>
+    """
+st.markdown(hide_elements, unsafe_allow_html=True)
+
 # --- CONFIGURATION ---
 GLOBAL_PASSWORD = st.secrets["general"]["password"]
 ADMIN_PASSWORD = st.secrets["general"]["admin_password"]
