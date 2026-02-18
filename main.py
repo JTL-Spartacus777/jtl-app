@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- GHOST MODE CSS ---
+# --- ENHANCED MOBILE DARK MODE CSS ---
 hide_elements = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -21,15 +21,40 @@ hide_elements = """
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stDecoration"] {display: none;}
     .stAppViewFooter {display: none !important;}
-    /* This part makes the tabs look better on mobile */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
+
+    /* --- MOBILE TAB STYLING --- */
+    /* Container for the tabs */
+    [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent !important;
     }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 5px;
+
+    /* Individual Tab Buttons */
+    [data-baseweb="tab"] {
+        border: 1px solid #4B5563 !important; /* Dark grey border */
+        border-radius: 8px !important;
+        padding: 10px 15px !important;
+        background-color: #1F2937 !important; /* Deep grey background */
+        color: #F3F4F6 !important; /* Off-white text */
+        font-weight: 600 !important;
+        min-width: 100px;
+    }
+
+    /* Active (Selected) Tab */
+    [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #3B82F6 !important; /* Bright Blue to show it's active */
+        border-color: #60A5FA !important;
+        color: white !important;
+    }
+
+    /* Remove the annoying underline Streamlit adds */
+    [data-baseweb="tab-highlight"] {
+        display: none !important;
+    }
+    
+    /* Make table text readable in dark mode */
+    .stTable, .stDataFrame {
+        border: 1px solid #4B5563;
     }
     </style>
     """
