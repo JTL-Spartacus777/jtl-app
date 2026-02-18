@@ -140,16 +140,25 @@ with tab_reg:
                 st.rerun()
 
 with tab_roster:
-    st.subheader(f"Total Players: {len(roster_data)}")
+    col_a, col_b = st.columns([3, 1])
+    col_a.subheader(f"Total Players: {len(roster_data)}")
+    if col_b.button("🔄 Refresh", key="refresh_roster"):
+        st.cache_data.clear()
+        st.rerun()
+        
     if roster_data:
         st.dataframe(pd.DataFrame(roster_data).sort_values(by="Inf_Cav", ascending=False), use_container_width=True)
     else:
         st.info("No one has signed up yet.")
 
 with tab_orders:
+    col_c, col_d = st.columns([3, 1])
+    col_c.subheader("Current Swap Orders")
+    if col_d.button("🔄 Refresh", key="refresh_orders"):
+        st.cache_data.clear()
+        st.rerun()
+
     if orders_data:
-        st.subheader("Current Swap Orders")
-        # Optimization: filter for own name?
         my_name = st.text_input("🔍 Filter by your name (optional)")
         df_orders = pd.DataFrame(orders_data).sort_values(by="From")
         
