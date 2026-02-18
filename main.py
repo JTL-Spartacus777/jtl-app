@@ -37,6 +37,17 @@ if not st.session_state["password_correct"]:
 
 st.title("⚔️ Kingshot Vikings: Troop Swap")
 
+# --- HIDE STREAMLIT BRANDING & GITHUB LINK ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            [data-testid="stToolbar"] {visibility: hidden !important;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 try:
     roster_data = fetch_data("Roster")
     orders_data = fetch_data("Orders")
