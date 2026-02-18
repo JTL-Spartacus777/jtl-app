@@ -5,7 +5,14 @@ from oauth2client.service_account import ServiceAccountCredentials
 import random
 import time
 
-# --- FULL GHOST MODE: HIDE ALL BRANDING, GITHUB, AND FOOTERS ---
+# MUST BE THE FIRST ST COMMAND
+st.set_page_config(
+    page_title="Kingshot Vikings Tool",
+    page_icon="⚔️",
+    layout="wide"
+)
+
+# --- GHOST MODE CSS ---
 hide_elements = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -13,14 +20,22 @@ hide_elements = """
     header {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stDecoration"] {display: none;}
-    [data-testid="stStatusWidget"] {display: none;}
-    #root > div:nth-child(1) > div > div > div > div > section > div {padding-top: 0rem;}
     .stAppViewFooter {display: none !important;}
+    /* This part makes the tabs look better on mobile */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f0f2f6;
+        border-radius: 5px;
+    }
     </style>
     """
 st.markdown(hide_elements, unsafe_allow_html=True)
 
-# --- CONFIGURATION ---
+# --- CONFIG & CONNECTION (Keep your existing secrets/creds logic) ---
 GLOBAL_PASSWORD = st.secrets["general"]["password"]
 ADMIN_PASSWORD = st.secrets["general"]["admin_password"]
 
@@ -50,35 +65,28 @@ if not st.session_state["password_correct"]:
             st.error("Wrong password")
     st.stop()
 
-st.title("⚔️ Kingshot Vikings: Troop Swap")
-
-# --- HIDE STREAMLIT BRANDING & GITHUB LINK ---
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            [data-testid="stToolbar"] {visibility: hidden !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+# --- MAIN APP ---
+st.title("⚔️ Kingshot Vikings Tool")
 
 try:
     roster_data = fetch_data("Roster")
     orders_data = fetch_data("Orders")
-except Exception as e:
-    st.error("Connection busy. Please refresh in 10 seconds.")
+except:
+    st.error("Connection busy. Refreshing...")
     st.stop()
 
-# --- SIDEBAR: PLAYER ACTIONS ---
-st.sidebar.header("Member Actions")
-with st.sidebar.expander("Add/Update My Entry"):
+# --- NEW TAB STRUCTURE FOR MOBILE ---
+# We use 3 tabs so everything is on the main screen
+tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER", "👥 ROSTER", "📜 SWAP ORDERS"])
+
+with tab_reg:
+    st.subheader("Add or Update Your Info")
     user = st.text_input("In-Game Username")
-    status = st.radio("Status", ["Online", "Offline"])
+    status = st.radio("Status", ["Online", "Offline"], horizontal=True)
     marches = st.slider("Marches you are sending", 4, 6, 5)
-    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=0, help="Higher numbers will be prioritized to receive 5+ marches.")
+    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=0)
     
-    if st.button("Submit Entry"):
+    if st.button("Submit My Entry", use_container_width=True): # Makes button wide on mobile
         if user:
             with st.spinner("Saving..."):
                 client = get_client()
@@ -86,45 +94,44 @@ with st.sidebar.expander("Add/Update My Entry"):
                 existing_idx = next((i for i, item in enumerate(roster_data) if item["Username"] == user), None)
                 if existing_idx is not None:
                     sheet.delete_rows(existing_idx + 2)
-                
-                # Column order: Username, Status, Marches_Available, Inf_Cav
                 sheet.append_row([user, status, marches, inf_cav])
                 st.cache_data.clear()
                 st.success(f"Saved {user}!")
                 time.sleep(1)
                 st.rerun()
-
-with st.sidebar.expander("❌ Remove My Entry"):
-    del_user = st.text_input("Confirm Username to Remove")
-    if st.button("Delete My Info"):
-        with st.spinner("Removing..."):
+    
+    st.markdown("---")
+    with st.expander("❌ Need to remove your entry?"):
+        del_user = st.text_input("Confirm Username to Delete")
+        if st.button("Delete My Info", use_container_width=True):
             client = get_client()
             sheet = client.open("Kingshot_Data").worksheet("Roster")
             existing_idx = next((i for i, item in enumerate(roster_data) if item["Username"] == del_user), None)
             if existing_idx is not None:
                 sheet.delete_rows(existing_idx + 2)
                 st.cache_data.clear()
-                st.success("Removed.")
+                st.success("Deleted.")
                 time.sleep(1)
                 st.rerun()
 
-# --- MAIN AREA ---
-tab1, tab2 = st.tabs(["Current Roster", "📜 SWAP ORDERS"])
-
-with tab1:
-    st.subheader(f"Registered Players: {len(roster_data)}")
+with tab_roster:
+    st.subheader(f"Total Players: {len(roster_data)}")
     if roster_data:
-        # Displaying with Strength column
-        df_roster = pd.DataFrame(roster_data).sort_values(by="Inf_Cav", ascending=False)
-        st.table(df_roster)
+        st.dataframe(pd.DataFrame(roster_data).sort_values(by="Inf_Cav", ascending=False), use_container_width=True)
     else:
-        st.info("Waiting for players...")
+        st.info("No one has signed up yet.")
 
-with tab2:
+with tab_orders:
     if orders_data:
-        st.header("📋 Alliance Swap Orders")
-        df_disp = pd.DataFrame(orders_data).sort_values(by="From")
-        st.table(df_disp)
+        st.subheader("Current Swap Orders")
+        # Optimization: filter for own name?
+        my_name = st.text_input("🔍 Filter by your name (optional)")
+        df_orders = pd.DataFrame(orders_data).sort_values(by="From")
+        
+        if my_name:
+            df_orders = df_orders[df_orders['From'].str.contains(my_name, case=False)]
+        
+        st.dataframe(df_orders, use_container_width=True)
     else:
         st.warning("Orders not yet generated.")
 
