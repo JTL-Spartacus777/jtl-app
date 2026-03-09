@@ -6,7 +6,7 @@ import random
 import time
 
 # 1. INITIAL CONFIG
-st.set_page_config(page_title="Kingshot Vikings Tool", page_icon="⚔️", layout="wide")
+st.set_page_config(page_title="JTL Vikings Tool", page_icon="⚔️", layout="wide")
 
 # 2. GHOST MODE & MOBILE CSS
 st.markdown("""
@@ -43,7 +43,7 @@ def fetch_all_data():
     sh = client.open("Kingshot_Data")
     return sh.worksheet("Roster").get_all_records(), sh.worksheet("Orders").get_all_records()
 
-# 4. AUTH
+# 4. AUTHENTICATION (Using st.secrets)
 GLOBAL_PASSWORD = st.secrets["general"]["password"]
 ADMIN_PASSWORD = st.secrets["general"]["admin_password"]
 
@@ -51,34 +51,35 @@ if "password_correct" not in st.session_state:
     st.session_state["password_correct"] = False
 
 if not st.session_state["password_correct"]:
-    st.title("⚔️ Alliance Login")
-    pw = st.text_input("Enter Password", type="password")
-    if st.button("Login"):
+    st.title("🛡️ JTL Vikings Login")
+    pw = st.text_input("Alliance Password", type="password")
+    if st.button("Access Tool", use_container_width=True):
         if pw == GLOBAL_PASSWORD:
             st.session_state["password_correct"] = True
             st.rerun()
-        else: st.error("Wrong password.")
+        else:
+            st.error("Incorrect Password")
     st.stop()
 
 # 5. DATA LOADING
 try:
     roster_data, orders_data = fetch_all_data()
 except Exception:
-    st.error("Connection busy. Wait 15s.")
+    st.error("Sheet Connection Busy. Please wait 15 seconds.")
     st.stop()
 
 # 6. UI TABS
-st.title("⚔️ Vikings Strict Swap")
+st.title("⚔️ JTL Vikings Swap Tool")
 tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER", "👥 ROSTER", "📜 SWAP ORDERS"])
 
 with tab_reg:
-    st.subheader("Register Troops")
+    st.subheader("Register Your Status")
     user = st.text_input("Username")
     status = st.radio("Status", ["Online", "Offline"], horizontal=True)
-    marches = st.slider("Marches to send", 4, 6, 5)
-    inf_cav = st.number_input("Infantry + Cavalry", min_value=0, value=0)
+    marches = st.slider("Marches you are sending", 4, 6, 5)
+    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=0)
     
-    if st.button("Submit Entry", use_container_width=True):
+    if st.button("Submit My Entry", use_container_width=True):
         if user:
             with st.spinner("Saving..."):
                 client = get_client()
@@ -92,59 +93,50 @@ with tab_reg:
 
 with tab_roster:
     c1, c2 = st.columns([3, 1])
-    c1.subheader(f"Total: {len(roster_data)}")
+    c1.subheader(f"Total Players: {len(roster_data)}")
     if c2.button("🔄 Refresh", key="r_rost"):
         st.cache_data.clear(); st.rerun()
-    st.dataframe(pd.DataFrame(roster_data), use_container_width=True)
+    if roster_data:
+        st.dataframe(pd.DataFrame(roster_data), use_container_width=True)
+    else:
+        st.info("No entries yet.")
 
 with tab_orders:
     c3, c4 = st.columns([3, 1])
-    c3.subheader("Strict Swap Orders (Max 4)")
+    c3.subheader("Live Swap Orders")
     if c4.button("🔄 Refresh", key="r_ord"):
         st.cache_data.clear(); st.rerun()
     if orders_data:
-        search = st.text_input("🔍 Search your name")
+        search = st.text_input("🔍 Search for your name")
         df_ord = pd.DataFrame(orders_data)
         if search: df_ord = df_ord[df_ord['From'].str.contains(search, case=False)]
         st.dataframe(df_ord, use_container_width=True)
-    else: st.info("Orders not generated.")
+    else: st.info("Orders not yet generated.")
 
-# 7. ADMIN CONTROLS
+# 7. ADMIN & LOGIC
 st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
-    admin_pw = st.text_input("Admin Key", type="password")
+    admin_key = st.text_input("Admin Key", type="password")
     
-    # --- NEW AUTOFILL TEST FUNCTION ---
     if st.button("🔨 Autofill 50 Test Entries"):
-        if admin_pw == ADMIN_PASSWORD:
-            with st.spinner("Generating Odin's Army..."):
-                test_users = []
-                for i in range(1, 51):
-                    test_users.append([
-                        f"Viking_{i}",
-                        random.choice(["Online", "Offline"]),
-                        random.randint(4, 6),
-                        random.randint(5000, 100000)
-                    ])
+        if admin_key == ADMIN_PASSWORD:
+            with st.spinner("Populating..."):
+                test_users = [[f"TestViking_{i}", random.choice(["Online", "Offline"]), random.randint(4, 6), random.randint(5000, 80000)] for i in range(1, 51)]
                 client = get_client()
-                sheet = client.open("Kingshot_Data").worksheet("Roster")
-                sheet.append_rows(test_users)
-                st.cache_data.clear()
-                st.success("Added 50 test users!")
-                time.sleep(1); st.rerun()
+                client.open("Kingshot_Data").worksheet("Roster").append_rows(test_users)
+                st.cache_data.clear(); st.success("50 Test Vikings added!"); time.sleep(1); st.rerun()
 
-    # --- UPDATED STRICT LOGIC ---
     if st.button("Generate & Publish Orders", use_container_width=True):
-        if admin_pw == ADMIN_PASSWORD:
-            with st.spinner("Calculating Strict Bubbles..."):
+        if admin_key == ADMIN_PASSWORD:
+            with st.spinner("Calculating Bubbles..."):
                 players = []
                 for p in roster_data:
                     players.append({
                         "Username": p["Username"], "Status": p["Status"],
-                        "Sends": int(p["Marches_Available"]), "Rec_Count": 0, "History": []
+                        "Sends": int(p["Marches_Available"]), "Inf_Cav": int(p.get("Inf_Cav", 0)),
+                        "Rec_Count": 0, "History": []
                     })
                 
-                # Split players into isolated pools
                 pools = {
                     "Online": [p for p in players if p["Status"] == "Online"],
                     "Offline": [p for p in players if p["Status"] == "Offline"]
@@ -153,21 +145,29 @@ with st.expander("🛡️ Admin Controls"):
                 final_rows = []
 
                 for status_type, pool in pools.items():
-                    # Create march-by-march queue for THIS pool
                     send_queue = []
                     for p in pool:
                         for _ in range(p["Sends"]): send_queue.append(p)
-                    
-                    # Randomize the send order for fairness
                     random.shuffle(send_queue)
 
                     for s in send_queue:
-                        # Find target ONLY in same pool with max 4 received
-                        eligible = [t for t in pool if t['Username'] != s['Username'] 
-                                    and t['Rec_Count'] < 4 and t['Username'] not in s['History']]
+                        # PASS 1: Fill everyone to 4 randomly
+                        eligible_4 = [t for t in pool if t['Username'] != s['Username'] 
+                                      and t['Rec_Count'] < 4 and t['Username'] not in s['History']]
                         
-                        if eligible:
-                            target = random.choice(eligible) # Random distribution
+                        if eligible_4:
+                            target = random.choice(eligible_4)
+                        else:
+                            # PASS 2: Overflow to 5, prioritizing LOWEST Inf_Cav
+                            eligible_5 = [t for t in pool if t['Username'] != s['Username'] 
+                                          and t['Rec_Count'] < 5 and t['Username'] not in s['History']]
+                            if eligible_5:
+                                eligible_5.sort(key=lambda x: x['Inf_Cav'])
+                                target = eligible_5[0]
+                            else:
+                                target = None
+
+                        if target:
                             final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
                             target['Rec_Count'] += 1
                             s['History'].append(target['Username'])
@@ -180,10 +180,10 @@ with st.expander("🛡️ Admin Controls"):
                 sheet.clear()
                 sheet.append_row(["From", "Status", "Send To", "Target Status"])
                 sheet.append_rows(df_final.values.tolist())
-                st.cache_data.clear(); st.success("Strict Orders Published!"); st.rerun()
+                st.cache_data.clear(); st.success("Orders Published!"); time.sleep(1); st.rerun()
 
     if st.button("Reset All Data"):
-        if admin_pw == ADMIN_PASSWORD:
+        if admin_key == ADMIN_PASSWORD:
             client = get_client()
             sh = client.open("Kingshot_Data")
             sh.worksheet("Roster").clear()
