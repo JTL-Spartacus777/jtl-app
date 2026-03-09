@@ -43,7 +43,7 @@ def fetch_all_data():
     sh = client.open("Kingshot_Data")
     return sh.worksheet("Roster").get_all_records(), sh.worksheet("Orders").get_all_records()
 
-# 4. AUTHENTICATION (Using st.secrets)
+# 4. AUTHENTICATION
 GLOBAL_PASSWORD = st.secrets["general"]["password"]
 ADMIN_PASSWORD = st.secrets["general"]["admin_password"]
 
@@ -118,17 +118,27 @@ st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
     admin_key = st.text_input("Admin Key", type="password")
     
+    # UPDATED AUTOFILL: 30 Online, 20 Offline
     if st.button("🔨 Autofill 50 Test Entries"):
         if admin_key == ADMIN_PASSWORD:
-            with st.spinner("Populating..."):
-                test_users = [[f"TestViking_{i}", random.choice(["Online", "Offline"]), random.randint(4, 6), random.randint(5000, 80000)] for i in range(1, 51)]
+            with st.spinner("Generating 30 Online & 20 Offline Vikings..."):
+                test_users = []
+                # Generate 30 Online
+                for i in range(1, 31):
+                    test_users.append([f"Online_Viking_{i}", "Online", random.randint(4, 6), random.randint(5000, 80000)])
+                # Generate 20 Offline
+                for i in range(1, 21):
+                    test_users.append([f"Offline_Viking_{i}", "Offline", random.randint(4, 6), random.randint(5000, 80000)])
+                
+                random.shuffle(test_users) # Mix them up
+                
                 client = get_client()
                 client.open("Kingshot_Data").worksheet("Roster").append_rows(test_users)
-                st.cache_data.clear(); st.success("50 Test Vikings added!"); time.sleep(1); st.rerun()
+                st.cache_data.clear(); st.success("The Army has arrived!"); time.sleep(1); st.rerun()
 
     if st.button("Generate & Publish Orders", use_container_width=True):
         if admin_key == ADMIN_PASSWORD:
-            with st.spinner("Calculating Bubbles..."):
+            with st.spinner("Calculating Spillovers..."):
                 players = []
                 for p in roster_data:
                     players.append({
@@ -137,42 +147,54 @@ with st.expander("🛡️ Admin Controls"):
                         "Rec_Count": 0, "History": []
                     })
                 
-                pools = {
-                    "Online": [p for p in players if p["Status"] == "Online"],
-                    "Offline": [p for p in players if p["Status"] == "Offline"]
-                }
+                online_pool = [p for p in players if p["Status"] == "Online"]
+                offline_pool = [p for p in players if p["Status"] == "Offline"]
                 
+                # Expand into a march-by-march queue
+                march_queue = []
+                for p in players:
+                    for _ in range(p["Sends"]):
+                        march_queue.append(p)
+                random.shuffle(march_queue)
+
+                def find_target(sender, pool, max_rec, prioritize_strength=False):
+                    eligible = [t for t in pool if t['Username'] != sender['Username'] 
+                                and t['Rec_Count'] < max_rec and t['Username'] not in sender['History']]
+                    if not eligible: return None
+                    if prioritize_strength:
+                        # Sort by Inf_Cav (Lowest first) then Rec_Count
+                        eligible.sort(key=lambda x: (x['Inf_Cav'], x['Rec_Count']))
+                        return eligible[0]
+                    return random.choice(eligible)
+
                 final_rows = []
+                for s in march_queue:
+                    target = None
+                    my_status = s["Status"]
+                    same_pool = online_pool if my_status == "Online" else offline_pool
+                    other_pool = offline_pool if my_status == "Online" else online_pool
 
-                for status_type, pool in pools.items():
-                    send_queue = []
-                    for p in pool:
-                        for _ in range(p["Sends"]): send_queue.append(p)
-                    random.shuffle(send_queue)
+                    # 1. Same Status (Cap 4)
+                    target = find_target(s, same_pool, 4)
+                    
+                    # 2. Same Status (Cap 5, Weakest Priority)
+                    if not target:
+                        target = find_target(s, same_pool, 5, prioritize_strength=True)
 
-                    for s in send_queue:
-                        # PASS 1: Fill everyone to 4 randomly
-                        eligible_4 = [t for t in pool if t['Username'] != s['Username'] 
-                                      and t['Rec_Count'] < 4 and t['Username'] not in s['History']]
-                        
-                        if eligible_4:
-                            target = random.choice(eligible_4)
-                        else:
-                            # PASS 2: Overflow to 5, prioritizing LOWEST Inf_Cav
-                            eligible_5 = [t for t in pool if t['Username'] != s['Username'] 
-                                          and t['Rec_Count'] < 5 and t['Username'] not in s['History']]
-                            if eligible_5:
-                                eligible_5.sort(key=lambda x: x['Inf_Cav'])
-                                target = eligible_5[0]
-                            else:
-                                target = None
+                    # 3. SPILLOVER: Other Status (Cap 4)
+                    if not target:
+                        target = find_target(s, other_pool, 4)
 
-                        if target:
-                            final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
-                            target['Rec_Count'] += 1
-                            s['History'].append(target['Username'])
-                        else:
-                            final_rows.append([s['Username'], s['Status'], "NO UNIQUE TARGET", "N/A"])
+                    # 4. SPILLOVER: Other Status (Cap 5, Weakest Priority)
+                    if not target:
+                        target = find_target(s, other_pool, 5, prioritize_strength=True)
+
+                    if target:
+                        final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
+                        target['Rec_Count'] += 1
+                        s['History'].append(target['Username'])
+                    else:
+                        final_rows.append([s['Username'], s['Status'], "NO TARGET FOUND", "N/A"])
 
                 df_final = pd.DataFrame(final_rows, columns=["From", "Status", "Send To", "Target Status"]).sort_values(by="From")
                 client = get_client()
