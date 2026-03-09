@@ -77,7 +77,7 @@ with tab_reg:
     user = st.text_input("Username")
     status = st.radio("Status", ["Online", "Offline"], horizontal=True)
     marches = st.slider("Marches you are sending", 4, 6, 5)
-    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=0)
+    inf_cav = st.number_input("Infantry + Cavalry Approximate Count", min_value=0, value=0)
     
     if st.button("Submit My Entry", use_container_width=True):
         if user:
