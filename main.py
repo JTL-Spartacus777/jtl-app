@@ -5,29 +5,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 import random
 import time
 
-# 1. INITIAL CONFIG (Must be first)
-st.set_page_config(
-    page_title="Kingshot Vikings Tool",
-    page_icon="⚔️",
-    layout="wide"
-)
+# 1. INITIAL CONFIG
+st.set_page_config(page_title="Kingshot Vikings Tool", page_icon="⚔️", layout="wide")
 
-# 2. GHOST MODE & MOBILE TAB CSS
-# This hides GitHub links and makes tabs look like high-contrast buttons
+# 2. GHOST MODE & MOBILE CSS
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #MainMenu, footer, header {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
-    [data-testid="stDecoration"] {display: none;}
     .stAppViewFooter {display: none !important;}
-
-    /* Mobile Tab Styling */
-    [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: transparent !important;
-    }
+    [data-baseweb="tab-list"] { gap: 8px; }
     [data-baseweb="tab"] {
         border: 1px solid #4B5563 !important;
         border-radius: 8px !important;
@@ -35,34 +22,28 @@ st.markdown("""
         background-color: #1F2937 !important;
         color: #F3F4F6 !important;
         font-weight: 600 !important;
-        min-width: 100px;
     }
     [data-baseweb="tab"][aria-selected="true"] {
         background-color: #3B82F6 !important;
         border-color: #60A5FA !important;
-        color: white !important;
     }
-    [data-baseweb="tab-highlight"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. GOOGLE API HELPERS
+# 3. API HELPERS
 def get_client():
     scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
     creds_dict = dict(st.secrets["gcp_service_account"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=15)
+@st.cache_data(ttl=10)
 def fetch_all_data():
-    """Fetches both tabs in one single handshake to prevent 429 errors."""
     client = get_client()
     sh = client.open("Kingshot_Data")
-    roster = sh.worksheet("Roster").get_all_records()
-    orders = sh.worksheet("Orders").get_all_records()
-    return roster, orders
+    return sh.worksheet("Roster").get_all_records(), sh.worksheet("Orders").get_all_records()
 
-# 4. AUTHENTICATION
+# 4. AUTH
 GLOBAL_PASSWORD = st.secrets["general"]["password"]
 ADMIN_PASSWORD = st.secrets["general"]["admin_password"]
 
@@ -76,162 +57,132 @@ if not st.session_state["password_correct"]:
         if pw == GLOBAL_PASSWORD:
             st.session_state["password_correct"] = True
             st.rerun()
-        else:
-            st.error("Invalid Password")
+        else: st.error("Wrong password.")
     st.stop()
 
 # 5. DATA LOADING
 try:
     roster_data, orders_data = fetch_all_data()
 except Exception:
-    st.error("🛡️ Sheet Connection Busy. Please wait 30 seconds and refresh.")
+    st.error("Connection busy. Wait 15s.")
     st.stop()
 
 # 6. UI TABS
-st.title("⚔️ Vikings Troop Swap")
+st.title("⚔️ Vikings Strict Swap")
 tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER", "👥 ROSTER", "📜 SWAP ORDERS"])
 
 with tab_reg:
-    st.subheader("Register Your Troops")
-    user = st.text_input("In-Game Username")
-    status = st.radio("Current Status", ["Online", "Offline"], horizontal=True)
-    marches = st.slider("Marches you are sending", 4, 6, 5)
-    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=0)
+    st.subheader("Register Troops")
+    user = st.text_input("Username")
+    status = st.radio("Status", ["Online", "Offline"], horizontal=True)
+    marches = st.slider("Marches to send", 4, 6, 5)
+    inf_cav = st.number_input("Infantry + Cavalry", min_value=0, value=0)
     
-    if st.button("Submit My Entry", use_container_width=True):
+    if st.button("Submit Entry", use_container_width=True):
         if user:
-            with st.spinner("Talking to Google..."):
+            with st.spinner("Saving..."):
                 client = get_client()
                 sheet = client.open("Kingshot_Data").worksheet("Roster")
                 idx = next((i for i, item in enumerate(roster_data) if item["Username"] == user), None)
-                if idx is not None:
-                    sheet.delete_rows(idx + 2)
+                if idx is not None: sheet.delete_rows(idx + 2)
                 sheet.append_row([user, status, marches, inf_cav])
                 st.cache_data.clear()
-                st.success(f"Successfully saved {user}!")
-                time.sleep(1)
-                st.rerun()
-    
-    st.markdown("---")
-    with st.expander("❌ Delete My Entry"):
-        del_user = st.text_input("Type username exactly to remove")
-        if st.button("Delete Info", use_container_width=True):
-            client = get_client()
-            sheet = client.open("Kingshot_Data").worksheet("Roster")
-            idx = next((i for i, item in enumerate(roster_data) if item["Username"] == del_user), None)
-            if idx is not None:
-                sheet.delete_rows(idx + 2)
-                st.cache_data.clear()
-                st.success("Entry removed.")
-                time.sleep(1)
-                st.rerun()
+                st.success(f"Saved {user}!")
+                time.sleep(1); st.rerun()
 
 with tab_roster:
     c1, c2 = st.columns([3, 1])
-    c1.subheader(f"Total Registered: {len(roster_data)}")
-    if c2.button("🔄 Refresh", key="ref_rost"):
-        st.cache_data.clear()
-        st.rerun()
-    if roster_data:
-        st.dataframe(pd.DataFrame(roster_data), use_container_width=True)
-    else:
-        st.info("No entries yet.")
+    c1.subheader(f"Total: {len(roster_data)}")
+    if c2.button("🔄 Refresh", key="r_rost"):
+        st.cache_data.clear(); st.rerun()
+    st.dataframe(pd.DataFrame(roster_data), use_container_width=True)
 
 with tab_orders:
     c3, c4 = st.columns([3, 1])
-    c3.subheader("Live Swap Orders")
-    if c4.button("🔄 Refresh", key="ref_ord"):
-        st.cache_data.clear()
-        st.rerun()
-    
+    c3.subheader("Strict Swap Orders (Max 4)")
+    if c4.button("🔄 Refresh", key="r_ord"):
+        st.cache_data.clear(); st.rerun()
     if orders_data:
-        search = st.text_input("🔍 Filter by your name")
+        search = st.text_input("🔍 Search your name")
         df_ord = pd.DataFrame(orders_data)
-        if search:
-            df_ord = df_ord[df_ord['From'].str.contains(search, case=False)]
+        if search: df_ord = df_ord[df_ord['From'].str.contains(search, case=False)]
         st.dataframe(df_ord, use_container_width=True)
-    else:
-        st.warning("Orders haven't been generated yet.")
+    else: st.info("Orders not generated.")
 
-# 7. ADMIN LOGIC ENGINE
+# 7. ADMIN CONTROLS
 st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
     admin_pw = st.text_input("Admin Key", type="password")
     
+    # --- NEW AUTOFILL TEST FUNCTION ---
+    if st.button("🔨 Autofill 50 Test Entries"):
+        if admin_pw == ADMIN_PASSWORD:
+            with st.spinner("Generating Odin's Army..."):
+                test_users = []
+                for i in range(1, 51):
+                    test_users.append([
+                        f"Viking_{i}",
+                        random.choice(["Online", "Offline"]),
+                        random.randint(4, 6),
+                        random.randint(5000, 100000)
+                    ])
+                client = get_client()
+                sheet = client.open("Kingshot_Data").worksheet("Roster")
+                sheet.append_rows(test_users)
+                st.cache_data.clear()
+                st.success("Added 50 test users!")
+                time.sleep(1); st.rerun()
+
+    # --- UPDATED STRICT LOGIC ---
     if st.button("Generate & Publish Orders", use_container_width=True):
         if admin_pw == ADMIN_PASSWORD:
-            with st.spinner("Calculating Bubbles & Strength..."):
-                if len(roster_data) < 2:
-                    st.error("Not enough players.")
-                else:
-                    # Prep Player Data
-                    players = []
-                    for p in roster_data:
-                        players.append({
-                            "Username": p["Username"], "Status": p["Status"],
-                            "Sends": int(p["Marches_Available"]), "Inf_Cav": int(p.get("Inf_Cav", 0)),
-                            "Rec_Count": 0, "History": []
-                        })
+            with st.spinner("Calculating Strict Bubbles..."):
+                players = []
+                for p in roster_data:
+                    players.append({
+                        "Username": p["Username"], "Status": p["Status"],
+                        "Sends": int(p["Marches_Available"]), "Rec_Count": 0, "History": []
+                    })
+                
+                # Split players into isolated pools
+                pools = {
+                    "Online": [p for p in players if p["Status"] == "Online"],
+                    "Offline": [p for p in players if p["Status"] == "Offline"]
+                }
+                
+                final_rows = []
+
+                for status_type, pool in pools.items():
+                    # Create march-by-march queue for THIS pool
+                    send_queue = []
+                    for p in pool:
+                        for _ in range(p["Sends"]): send_queue.append(p)
                     
-                    # Create Queue
-                    all_marches = []
-                    for p in players:
-                        for _ in range(p["Sends"]): all_marches.append(p)
-                    random.shuffle(all_marches)
+                    # Randomize the send order for fairness
+                    random.shuffle(send_queue)
 
-                    final_rows = []
-
-                    def find_target(sender, pool, cap, use_strength_priority=False):
-                        eligible = [t for t in pool if t['Username'] != sender['Username'] 
-                                    and t['Rec_Count'] < cap and t['Username'] not in sender['History']]
-                        if not eligible: return None
+                    for s in send_queue:
+                        # Find target ONLY in same pool with max 4 received
+                        eligible = [t for t in pool if t['Username'] != s['Username'] 
+                                    and t['Rec_Count'] < 4 and t['Username'] not in s['History']]
                         
-                        if use_strength_priority:
-                            # WEAKEST players (Lowest Inf_Cav) get priority to receive extra
-                            eligible.sort(key=lambda x: (x['Inf_Cav'], x['Rec_Count']))
-                        else:
-                            eligible.sort(key=lambda x: x['Rec_Count'])
-                        return eligible[0]
-
-                    # WATERFALL LOGIC
-                    for s in all_marches:
-                        target = None
-                        # Pass 1: Same Bubble (Cap 4)
-                        target = find_target(s, [p for p in players if p['Status'] == s['Status']], 4)
-                        # Pass 2: Online -> Offline Leak (Cap 4)
-                        if not target and s['Status'] == "Online":
-                            target = find_target(s, [p for p in players if p['Status'] == "Offline"], 4)
-                        # Pass 3: Step Up to 5 (Weakest Players First)
-                        if not target:
-                            target = find_target(s, players, 5, use_strength_priority=True)
-                        # Pass 4: Step Up to 6 (Emergency)
-                        if not target:
-                            target = find_target(s, players, 6, use_strength_priority=True)
-
-                        if target:
+                        if eligible:
+                            target = random.choice(eligible) # Random distribution
                             final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
                             target['Rec_Count'] += 1
                             s['History'].append(target['Username'])
                         else:
                             final_rows.append([s['Username'], s['Status'], "NO UNIQUE TARGET", "N/A"])
 
-                    # Save to Google Sheets
-                    df_final = pd.DataFrame(final_rows, columns=["From", "Status", "Send To", "Target Status"]).sort_values(by="From")
-                    client = get_client()
-                    sh = client.open("Kingshot_Data")
-                    order_sheet = sh.worksheet("Orders")
-                    order_sheet.clear()
-                    order_sheet.append_row(["From", "Status", "Send To", "Target Status"])
-                    order_sheet.append_rows(df_final.values.tolist())
-                    
-                    st.cache_data.clear()
-                    st.success("Swaps Published Successfully!")
-                    time.sleep(1)
-                    st.rerun()
-        else:
-            st.error("Admin Password Incorrect")
+                df_final = pd.DataFrame(final_rows, columns=["From", "Status", "Send To", "Target Status"]).sort_values(by="From")
+                client = get_client()
+                sheet = client.open("Kingshot_Data").worksheet("Orders")
+                sheet.clear()
+                sheet.append_row(["From", "Status", "Send To", "Target Status"])
+                sheet.append_rows(df_final.values.tolist())
+                st.cache_data.clear(); st.success("Strict Orders Published!"); st.rerun()
 
-    if st.button("Reset Entire Website"):
+    if st.button("Reset All Data"):
         if admin_pw == ADMIN_PASSWORD:
             client = get_client()
             sh = client.open("Kingshot_Data")
@@ -239,6 +190,4 @@ with st.expander("🛡️ Admin Controls"):
             sh.worksheet("Roster").append_row(["Username", "Status", "Marches_Available", "Inf_Cav"])
             sh.worksheet("Orders").clear()
             sh.worksheet("Orders").append_row(["From", "Status", "Send To", "Target Status"])
-            st.cache_data.clear()
-            st.success("All data wiped.")
-            st.rerun()
+            st.cache_data.clear(); st.success("Wiped."); st.rerun()
