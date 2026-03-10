@@ -70,26 +70,70 @@ except Exception:
 
 # 6. UI TABS
 st.title("⚔️ JTL Vikings Swap Tool")
-tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER", "👥 ROSTER", "📜 SWAP ORDERS"])
+tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER / EDIT", "👥 ROSTER", "📜 SWAP ORDERS"])
 
 with tab_reg:
-    st.subheader("Register Your Status")
-    user = st.text_input("Username")
-    status = st.radio("Status", ["Online", "Offline"], horizontal=True)
-    marches = st.slider("Marches you are sending", 4, 6, 5)
-    inf_cav = st.number_input("Infantry + Cavalry Approximate Count", min_value=0, value=0)
+    st.subheader("Manage Your Troop Status")
     
-    if st.button("Submit My Entry", use_container_width=True):
-        if user:
-            with st.spinner("Saving..."):
+    # Identify if user already exists to allow "Editing"
+    user_input = st.text_input("Username (Case Sensitive)").strip()
+    existing_user = next((item for item in roster_data if item["Username"] == user_input), None)
+    
+    if existing_user:
+        st.info(f"✨ **{user_input}** is already registered. Updating below will overwrite your old data.")
+        default_status = existing_user["Status"]
+        default_marches = int(existing_user["Marches_Available"])
+        default_inf_cav = int(existing_user["Inf_Cav"])
+        btn_label = "Update My Entry"
+    else:
+        default_status = "Online"
+        default_marches = 5
+        default_inf_cav = 0
+        btn_label = "Register Me"
+
+    status = st.radio("Status", ["Online", "Offline"], index=0 if default_status == "Online" else 1, horizontal=True)
+    marches = st.slider("Marches you are sending", 4, 6, default_marches)
+    inf_cav = st.number_input("Infantry + Cavalry Count", min_value=0, value=default_inf_cav)
+    
+    if st.button(btn_label, use_container_width=True):
+        if user_input:
+            with st.spinner("Talking to the gods..."):
                 client = get_client()
                 sheet = client.open("Kingshot_Data").worksheet("Roster")
-                idx = next((i for i, item in enumerate(roster_data) if item["Username"] == user), None)
-                if idx is not None: sheet.delete_rows(idx + 2)
-                sheet.append_row([user, status, marches, inf_cav])
+                
+                # If editing, find and delete the old row first
+                if existing_user:
+                    all_rows = sheet.get_all_values()
+                    for idx, row in enumerate(all_rows):
+                        if row[0] == user_input:
+                            sheet.delete_rows(idx + 1)
+                            break
+                
+                sheet.append_row([user_input, status, marches, inf_cav])
                 st.cache_data.clear()
-                st.success(f"Saved {user}!")
+                st.success(f"Success! {user_input} has been { 'updated' if existing_user else 'registered' }.")
                 time.sleep(1); st.rerun()
+        else:
+            st.warning("Please enter your username.")
+
+    st.markdown("---")
+    with st.expander("🗑️ Delete My Entry"):
+        st.write("Type your username exactly to remove yourself from the roster.")
+        del_user = st.text_input("Confirm Username to Delete").strip()
+        if st.button("Permanently Remove Me", type="primary"):
+            target = next((item for item in roster_data if item["Username"] == del_user), None)
+            if target:
+                client = get_client()
+                sheet = client.open("Kingshot_Data").worksheet("Roster")
+                all_rows = sheet.get_all_values()
+                for idx, row in enumerate(all_rows):
+                    if row[0] == del_user:
+                        sheet.delete_rows(idx + 1)
+                        st.cache_data.clear()
+                        st.success(f"{del_user} removed from roster.")
+                        time.sleep(1); st.rerun()
+            else:
+                st.error("Username not found in current roster.")
 
 with tab_roster:
     c1, c2 = st.columns([3, 1])
@@ -108,37 +152,34 @@ with tab_orders:
         st.cache_data.clear(); st.rerun()
     if orders_data:
         search = st.text_input("🔍 Search for your name")
-        df_ord = pd.DataFrame(orders_data)
-        if search: df_ord = df_ord[df_ord['From'].str.contains(search, case=False)]
-        st.dataframe(df_ord, use_container_width=True)
-    else: st.info("Orders not yet generated.")
+        df_ord_display = pd.DataFrame(orders_data)
+        if search:
+            df_ord_display = df_ord_display[df_ord_display['From'].str.contains(search, case=False)]
+        st.dataframe(df_ord_display, use_container_width=True)
+    else:
+        st.info("Orders not yet generated.")
 
 # 7. ADMIN & LOGIC
 st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
     admin_key = st.text_input("Admin Key", type="password")
     
-    # UPDATED AUTOFILL: 30 Online, 20 Offline
-    if st.button("🔨 Autofill 50 Test Entries"):
+    if st.button("🔨 Autofill 30 Online / 20 Offline"):
         if admin_key == ADMIN_PASSWORD:
-            with st.spinner("Generating 30 Online & 20 Offline Vikings..."):
+            with st.spinner("Generating Vikings..."):
                 test_users = []
-                # Generate 30 Online
                 for i in range(1, 31):
-                    test_users.append([f"Online_Viking_{i}", "Online", random.randint(4, 6), random.randint(5000, 80000)])
-                # Generate 20 Offline
+                    test_users.append([f"OnViking_{i}", "Online", random.randint(4, 6), random.randint(5000, 80000)])
                 for i in range(1, 21):
-                    test_users.append([f"Offline_Viking_{i}", "Offline", random.randint(4, 6), random.randint(5000, 80000)])
-                
-                random.shuffle(test_users) # Mix them up
-                
+                    test_users.append([f"OffViking_{i}", "Offline", random.randint(4, 6), random.randint(5000, 80000)])
+                random.shuffle(test_users)
                 client = get_client()
                 client.open("Kingshot_Data").worksheet("Roster").append_rows(test_users)
-                st.cache_data.clear(); st.success("The Army has arrived!"); time.sleep(1); st.rerun()
+                st.cache_data.clear(); st.success("50 Test Vikings added!"); time.sleep(1); st.rerun()
 
     if st.button("Generate & Publish Orders", use_container_width=True):
         if admin_key == ADMIN_PASSWORD:
-            with st.spinner("Calculating Spillovers..."):
+            with st.spinner("Running Randomized Round-Robin..."):
                 players = []
                 for p in roster_data:
                     players.append({
@@ -150,51 +191,46 @@ with st.expander("🛡️ Admin Controls"):
                 online_pool = [p for p in players if p["Status"] == "Online"]
                 offline_pool = [p for p in players if p["Status"] == "Offline"]
                 
-                # Expand into a march-by-march queue
-                march_queue = []
-                for p in players:
-                    for _ in range(p["Sends"]):
-                        march_queue.append(p)
-                random.shuffle(march_queue)
-
                 def find_target(sender, pool, max_rec, prioritize_strength=False):
                     eligible = [t for t in pool if t['Username'] != sender['Username'] 
                                 and t['Rec_Count'] < max_rec and t['Username'] not in sender['History']]
                     if not eligible: return None
                     if prioritize_strength:
-                        # Sort by Inf_Cav (Lowest first) then Rec_Count
                         eligible.sort(key=lambda x: (x['Inf_Cav'], x['Rec_Count']))
                         return eligible[0]
                     return random.choice(eligible)
 
                 final_rows = []
-                for s in march_queue:
-                    target = None
-                    my_status = s["Status"]
-                    same_pool = online_pool if my_status == "Online" else offline_pool
-                    other_pool = offline_pool if my_status == "Online" else online_pool
+                success_count = 0
+                fail_count = 0
 
-                    # 1. Same Status (Cap 4)
-                    target = find_target(s, same_pool, 4)
-                    
-                    # 2. Same Status (Cap 5, Weakest Priority)
-                    if not target:
-                        target = find_target(s, same_pool, 5, prioritize_strength=True)
+                for round_num in range(1, 7):
+                    current_round_senders = [p for p in players if p["Sends"] >= round_num]
+                    random.shuffle(current_round_senders)
 
-                    # 3. SPILLOVER: Other Status (Cap 4)
-                    if not target:
-                        target = find_target(s, other_pool, 4)
+                    for s in current_round_senders:
+                        target = None
+                        my_status = s["Status"]
+                        same_pool = online_pool if my_status == "Online" else offline_pool
+                        other_pool = offline_pool if my_status == "Online" else online_pool
 
-                    # 4. SPILLOVER: Other Status (Cap 5, Weakest Priority)
-                    if not target:
-                        target = find_target(s, other_pool, 5, prioritize_strength=True)
+                        # Waterfall Logic
+                        target = find_target(s, same_pool, 4)
+                        if not target:
+                            target = find_target(s, same_pool, 5, prioritize_strength=True)
+                        if not target:
+                            target = find_target(s, other_pool, 4)
+                        if not target:
+                            target = find_target(s, other_pool, 5, prioritize_strength=True)
 
-                    if target:
-                        final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
-                        target['Rec_Count'] += 1
-                        s['History'].append(target['Username'])
-                    else:
-                        final_rows.append([s['Username'], s['Status'], "NO TARGET FOUND", "N/A"])
+                        if target:
+                            final_rows.append([s['Username'], s['Status'], target['Username'], target['Status']])
+                            target['Rec_Count'] += 1
+                            s['History'].append(target['Username'])
+                            success_count += 1
+                        else:
+                            final_rows.append([s['Username'], s['Status'], "NO TARGET FOUND", "N/A"])
+                            fail_count += 1
 
                 df_final = pd.DataFrame(final_rows, columns=["From", "Status", "Send To", "Target Status"]).sort_values(by="From")
                 client = get_client()
@@ -202,7 +238,9 @@ with st.expander("🛡️ Admin Controls"):
                 sheet.clear()
                 sheet.append_row(["From", "Status", "Send To", "Target Status"])
                 sheet.append_rows(df_final.values.tolist())
-                st.cache_data.clear(); st.success("Orders Published!"); time.sleep(1); st.rerun()
+                st.cache_data.clear()
+                st.success(f"Orders Published! ✅ {success_count} Connected | ⚠️ {fail_count} Failed.")
+                time.sleep(2); st.rerun()
 
     if st.button("Reset All Data"):
         if admin_key == ADMIN_PASSWORD:
