@@ -131,7 +131,7 @@ with tab_reg:
     with col_b: status_2 = st.selectbox("Event 2 Status", ["Online", "Offline"], index=0 if s2_def == "Online" else 1)
     
     marches = st.slider("Marches to send", 4, 6, m_def)
-    inf_cav = st.number_input("General Inf/Cav Power", min_value=0, value=ic_def)
+    inf_cav = st.number_input("Approximate Infantry + Cavalry count", min_value=0, value=ic_def)
     
     with st.expander("⚙️ Advanced (Optional; Can update after assignment)"):
         cx, cy = st.columns(2)
