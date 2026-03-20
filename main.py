@@ -9,7 +9,7 @@ from datetime import datetime
 # 1. INITIAL CONFIG
 st.set_page_config(page_title="JTL Vikings Tool", page_icon="⚔️", layout="wide")
 
-# 2. MOBILE-OPTIMIZED CSS
+# 2. MOBILE-OPTIMIZED & LIGHT-INPUT CSS
 st.markdown("""
     <style>
     /* Hide headers/footers */
@@ -29,16 +29,31 @@ st.markdown("""
         text-align: center;
     }
     
+    /* LIGHT INPUT BOXES (Targeting Admin and Registration fields) */
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="select"] > div {
+        background-color: #F0F2F6 !important; /* Light Grey/White */
+        color: #1F2937 !important; /* Dark Text */
+        border-radius: 8px !important;
+    }
+    
+    /* Ensure text inside inputs is dark */
+    input {
+        color: #1F2937 !important;
+    }
+
     /* Cards for readability on small screens */
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
         height: 3em;
+        font-weight: 700;
     }
     .stMetric {
         background-color: #1F2937;
         padding: 10px;
         border-radius: 10px;
+        border: 1px solid #374151;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -54,7 +69,6 @@ def get_client():
 def fetch_all_data():
     client = get_client()
     sh = client.open("Kingshot_Data")
-    # Fetch Roster, Orders, and Event Times
     roster = sh.worksheet("Roster").get_all_records()
     orders = sh.worksheet("Orders").get_all_records()
     meta = {row['Key']: row['Value'] for row in sh.worksheet("Meta").get_all_records()}
@@ -146,6 +160,7 @@ with st.expander("🛡️ Admin Controls"):
     admin_key = st.text_input("Admin Key", type="password")
     
     # Update Times
+    st.write("### Set Event Times")
     t1 = st.text_input("Event 1 UTC Time", value=event_1_time)
     t2 = st.text_input("Event 2 UTC Time", value=event_2_time)
     if st.button("Update UTC Times"):
@@ -156,6 +171,7 @@ with st.expander("🛡️ Admin Controls"):
             ms.append_rows([["event_1_time", t1], ["event_2_time", t2]])
             st.cache_data.clear(); st.success("Times Updated!"); st.rerun()
 
+    st.write("### Logic Engine")
     event_to_gen = st.selectbox("Generate Orders For:", ["Event 1", "Event 2"])
     
     if st.button("Generate & Publish Orders", use_container_width=True):
@@ -201,12 +217,13 @@ with st.expander("🛡️ Admin Controls"):
                         else:
                             final_rows.append([s['Username'], s['Status'], "NO TARGET FOUND", "N/A"])
 
+                client = get_client()
                 sheet = client.open("Kingshot_Data").worksheet("Orders")
                 sheet.clear(); sheet.append_row(["From", "Status", "Send To", "Target Status"])
                 sheet.append_rows(pd.DataFrame(final_rows).sort_values(0).values.tolist())
                 st.cache_data.clear(); st.success("Done!"); time.sleep(1); st.rerun()
 
-    if st.button("Reset Roster"):
+    if st.button("Reset Roster", type="secondary"):
         if admin_key == ADMIN_PASSWORD:
             client = get_client(); sh = client.open("Kingshot_Data").worksheet("Roster")
             sh.clear(); sh.append_row(["Username", "Status_1", "Status_2", "Marches", "Inf_Cav"])
