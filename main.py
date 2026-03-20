@@ -9,13 +9,39 @@ from datetime import datetime
 # 1. INITIAL CONFIG
 st.set_page_config(page_title="JTL Vikings Tool", page_icon="⚔️", layout="wide")
 
-# 2. MOBILE-OPTIMIZED & LIGHT-INPUT CSS
+# 2. MOBILE-OPTIMIZED & LIGHT-THEME CSS
 st.markdown("""
     <style>
     /* Hide headers/footers */
     #MainMenu, footer, header {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     
+    /* LIGHT METRIC BOXES (Top Headers) */
+    [data-testid="stMetric"] {
+        background-color: #F0F2F6 !important; 
+        border: 1px solid #D1D5DB !important;
+        border-radius: 10px;
+        padding: 10px;
+    }
+    /* Force Metric Text to be Dark */
+    [data-testid="stMetric"] label, 
+    [data-testid="stMetric"] div {
+        color: #1F2937 !important;
+    }
+
+    /* LIGHT INPUT BOXES (Text Inputs & Select Boxes) */
+    div[data-baseweb="input"] > div, 
+    div[data-baseweb="select"] > div {
+        background-color: #F0F2F6 !important; 
+        color: #1F2937 !important; 
+        border-radius: 8px !important;
+    }
+    
+    /* Ensure typed text is dark */
+    input {
+        color: #1F2937 !important;
+    }
+
     /* Mobile-friendly tabs */
     [data-baseweb="tab-list"] { 
         gap: 4px;
@@ -28,32 +54,12 @@ st.markdown("""
         flex-grow: 1;
         text-align: center;
     }
-    
-    /* LIGHT INPUT BOXES (Targeting Admin and Registration fields) */
-    div[data-baseweb="input"] > div, 
-    div[data-baseweb="select"] > div {
-        background-color: #F0F2F6 !important; /* Light Grey/White */
-        color: #1F2937 !important; /* Dark Text */
-        border-radius: 8px !important;
-    }
-    
-    /* Ensure text inside inputs is dark */
-    input {
-        color: #1F2937 !important;
-    }
 
-    /* Cards for readability on small screens */
     div.stButton > button {
         width: 100%;
         border-radius: 10px;
         height: 3em;
         font-weight: 700;
-    }
-    .stMetric {
-        background-color: #1F2937;
-        padding: 10px;
-        border-radius: 10px;
-        border: 1px solid #374151;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -100,7 +106,7 @@ except Exception as e:
     st.error(f"Sync Error: {e}")
     st.stop()
 
-# 6. HEADER INFO (Mobile Friendly)
+# 6. HEADER INFO (Light Themed Metrics)
 c1, c2 = st.columns(2)
 with c1: st.metric("Event 1 (UTC)", event_1_time)
 with c2: st.metric("Event 2 (UTC)", event_2_time)
@@ -110,7 +116,7 @@ tab_reg, tab_roster, tab_orders = st.tabs(["📝 REGISTER", "👥 ROSTER", "📜
 
 with tab_reg:
     st.subheader("Viking Availability")
-    user_input = st.text_input("Username (Case Sensitive)").strip()
+    user_input = st.text_input("Username").strip()
     existing_user = next((item for item in roster_data if item["Username"] == user_input), None)
     
     if existing_user:
@@ -159,7 +165,6 @@ st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
     admin_key = st.text_input("Admin Key", type="password")
     
-    # Update Times
     st.write("### Set Event Times")
     t1 = st.text_input("Event 1 UTC Time", value=event_1_time)
     t2 = st.text_input("Event 2 UTC Time", value=event_2_time)
@@ -223,7 +228,7 @@ with st.expander("🛡️ Admin Controls"):
                 sheet.append_rows(pd.DataFrame(final_rows).sort_values(0).values.tolist())
                 st.cache_data.clear(); st.success("Done!"); time.sleep(1); st.rerun()
 
-    if st.button("Reset Roster", type="secondary"):
+    if st.button("Reset Roster"):
         if admin_key == ADMIN_PASSWORD:
             client = get_client(); sh = client.open("Kingshot_Data").worksheet("Roster")
             sh.clear(); sh.append_row(["Username", "Status_1", "Status_2", "Marches", "Inf_Cav"])
