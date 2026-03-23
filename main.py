@@ -165,16 +165,29 @@ with tab_orders:
             s_name, t_name = o['From'], o['Send To']
             s_d, t_d = r_dict.get(s_name, {}), r_dict.get(t_name, {})
             
-            # Troop Math
-            n_m, m_sz = safe_int(s_d.get('Marches', 0)), safe_int(s_d.get('March_Size', 0))
+            # --- UPDATED TROOP WATERFALL MATH ---
+            n_m = safe_int(s_d.get('Marches', 0))
+            m_sz = safe_int(s_d.get('March_Size', 0))
             m_str = "Not Set"
+            
             if n_m > 0 and m_sz > 0:
-                p_i, p_c, p_a = safe_int(s_d.get('Inf',0))//n_m, safe_int(s_d.get('Cav',0))//n_m, safe_int(s_d.get('Arch',0))//n_m
-                m_i = min(p_i, m_sz)
-                rem = m_sz - m_i
-                m_c = min(p_c, rem)
-                m_a = min(p_a, rem - m_c)
-                m_str = f"⚔️{m_i} | 🐎{m_c} | 🏹{m_a}"
+                # 1. Divide total available troops evenly by the number of marches
+                p_i = safe_int(s_d.get('Inf', 0)) // n_m
+                p_c = safe_int(s_d.get('Cav', 0)) // n_m
+                p_a = safe_int(s_d.get('Arch', 0)) // n_m
+                
+                # 2. Fill the march capacity, prioritizing Infantry > Cavalry > Archers
+                m_i = min(p_i, m_sz)        # Take as much Infantry as fits in the march size
+                rem = m_sz - m_i            # Calculate remaining space
+                
+                m_c = min(p_c, rem)         # Fill remaining space with Cavalry
+                rem -= m_c                  # Calculate remaining space
+                
+                m_a = min(p_a, rem)         # Fill any leftover space with Archers
+                
+                # Format with commas for better readability (e.g., 100,000)
+                m_str = f"⚔️ {m_i:,} | 🐎 {m_c:,} | 🏹 {m_a:,}"
+            # ------------------------------------
             
             coords = f"X:{t_d.get('X','?')} Y:{t_d.get('Y','?')}"
             disp.append({"From": s_name, "Per March": m_str, "Send To": t_name, "Target Coords": coords})
@@ -182,7 +195,7 @@ with tab_orders:
         df_d = pd.DataFrame(disp)
         if search: df_d = df_d[df_d['From'].str.contains(search, case=False)]
         st.dataframe(df_d, use_container_width=True, hide_index=True)
-
+        
 # 8. ADMIN
 st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
