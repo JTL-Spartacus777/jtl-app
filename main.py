@@ -165,29 +165,22 @@ with tab_orders:
             s_name, t_name = o['From'], o['Send To']
             s_d, t_d = r_dict.get(s_name, {}), r_dict.get(t_name, {})
             
-            # --- UPDATED TROOP WATERFALL MATH ---
             n_m = safe_int(s_d.get('Marches', 0))
             m_sz = safe_int(s_d.get('March_Size', 0))
             m_str = "Not Set"
             
             if n_m > 0 and m_sz > 0:
-                # 1. Divide total available troops evenly by the number of marches
                 p_i = safe_int(s_d.get('Inf', 0)) // n_m
                 p_c = safe_int(s_d.get('Cav', 0)) // n_m
                 p_a = safe_int(s_d.get('Arch', 0)) // n_m
                 
-                # 2. Fill the march capacity, prioritizing Infantry > Cavalry > Archers
-                m_i = min(p_i, m_sz)        # Take as much Infantry as fits in the march size
-                rem = m_sz - m_i            # Calculate remaining space
+                m_i = min(p_i, m_sz)
+                rem = m_sz - m_i
+                m_c = min(p_c, rem)
+                rem -= m_c
+                m_a = min(p_a, rem)
                 
-                m_c = min(p_c, rem)         # Fill remaining space with Cavalry
-                rem -= m_c                  # Calculate remaining space
-                
-                m_a = min(p_a, rem)         # Fill any leftover space with Archers
-                
-                # Format with commas for better readability (e.g., 100,000)
                 m_str = f"⚔️ {m_i:,} | 🐎 {m_c:,} | 🏹 {m_a:,}"
-            # ------------------------------------
             
             coords = f"X:{t_d.get('X','?')} Y:{t_d.get('Y','?')}"
             disp.append({"From": s_name, "Per March": m_str, "Send To": t_name, "Target Coords": coords})
@@ -201,6 +194,10 @@ st.markdown("---")
 with st.expander("🛡️ Admin Controls"):
     admin_key = st.text_input("Admin Key", type="password")
     
+    st.write("### Set Event Times")
+    t1 = st.text_input("Event 1 UTC Time", value=event_1_time)
+    t2 = st.text_input("Event 2 UTC Time", value=event_2_time)
+    
     if st.button("Update UTC Times"):
         if admin_key == ADMIN_PASSWORD:
             client = get_client()
@@ -209,6 +206,7 @@ with st.expander("🛡️ Admin Controls"):
             ms.append_rows([["event_1_time", t1], ["event_2_time", t2]])
             st.cache_data.clear(); st.success("Updated!"); st.rerun()
 
+    st.write("### Logic Engine")
     event_gen = st.selectbox("Orders For:", ["Event 1", "Event 2"])
     if st.button("🚀 Generate & Publish", use_container_width=True):
         if admin_key == ADMIN_PASSWORD:
@@ -216,27 +214,40 @@ with st.expander("🛡️ Admin Controls"):
             players = [{"Username": p["Username"], "Status": p[status_col], "Sends": safe_int(p["Marches"]), "Inf_Cav": safe_int(p["Inf_Cav"]), "Rec_Count": 0, "History": []} for p in roster_data]
             on_p, off_p = [p for p in players if p["Status"] == "Online"], [p for p in players if p["Status"] == "Offline"]
             
+            # --- UPDATED EVEN DISTRIBUTION LOGIC ---
             def find_t(s, pool, mx):
                 elig = [t for t in pool if t['Username'] != s['Username'] and t['Rec_Count'] < mx and t['Username'] not in s['History']]
                 if not elig: return None
-                random.shuffle(elig); return elig[0]
+                
+                # 1. Shuffle to ensure random tie-breaking
+                random.shuffle(elig)
+                
+                # 2. Sort by Rec_Count so players with the LEAST marches get priority
+                elig.sort(key=lambda x: x['Rec_Count'])
+                
+                return elig[0]
+            # ---------------------------------------
 
             final = []
             for rd in range(1, 7):
                 senders = [p for p in players if p["Sends"] >= rd]
                 random.shuffle(senders)
                 for s in senders:
-                    target = find_t(s, on_p if s["Status"] == "Online" else off_p, 4) or find_t(s, off_p if s["Status"] == "Online" else on_p, 4) or find_t(s, on_p + off_p, 6)
+                    my_pool = on_p if s["Status"] == "Online" else off_p
+                    target = find_t(s, my_pool, 4) 
+                    
                     if target:
                         final.append([s['Username'], s['Status'], target['Username'], target['Status']])
                         target['Rec_Count'] += 1; s['History'].append(target['Username'])
-                    else: final.append([s['Username'], s['Status'], "NO TARGET", "N/A"])
+                    else: 
+                        final.append([s['Username'], s['Status'], "NO TARGET", "N/A"])
 
             client = get_client(); os = client.open("Kingshot_Data").worksheet("Orders")
             os.clear(); os.append_row(["From", "Status", "Send To", "Target Status"])
             os.append_rows(pd.DataFrame(final).sort_values(0).values.tolist())
             st.cache_data.clear(); st.success("Orders Live!"); st.rerun()
 
+    st.write("### Data Management")
     if st.button("🧪 Auto-Generate 50 Test Users"):
         if admin_key == ADMIN_PASSWORD:
             tests = []
@@ -247,7 +258,13 @@ with st.expander("🛡️ Admin Controls"):
             rs.clear(); rs.append_row(["Username", "Status_1", "Status_2", "Marches", "Inf_Cav", "X", "Y", "March_Size", "Inf", "Cav", "Arch"])
             rs.append_rows(tests); st.cache_data.clear(); st.rerun()
 
-    if st.button("Reset Roster", type="secondary"):
+    if st.button("Reset Swap Orders (Keep Roster)", type="secondary"):
+        if admin_key == ADMIN_PASSWORD:
+            client = get_client(); os = client.open("Kingshot_Data").worksheet("Orders")
+            os.clear(); os.append_row(["From", "Status", "Send To", "Target Status"])
+            st.cache_data.clear(); st.success("Swap Orders Cleared!"); st.rerun()
+
+    if st.button("Reset Full Roster", type="secondary"):
         if admin_key == ADMIN_PASSWORD:
             client = get_client(); rs = client.open("Kingshot_Data").worksheet("Roster")
             rs.clear(); rs.append_row(["Username", "Status_1", "Status_2", "Marches", "Inf_Cav", "X", "Y", "March_Size", "Inf", "Cav", "Arch"])
