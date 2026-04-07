@@ -214,19 +214,12 @@ with st.expander("🛡️ Admin Controls"):
             players = [{"Username": p["Username"], "Status": p[status_col], "Sends": safe_int(p["Marches"]), "Inf_Cav": safe_int(p["Inf_Cav"]), "Rec_Count": 0, "History": []} for p in roster_data]
             on_p, off_p = [p for p in players if p["Status"] == "Online"], [p for p in players if p["Status"] == "Offline"]
             
-            # --- UPDATED EVEN DISTRIBUTION LOGIC ---
             def find_t(s, pool, mx):
                 elig = [t for t in pool if t['Username'] != s['Username'] and t['Rec_Count'] < mx and t['Username'] not in s['History']]
                 if not elig: return None
-                
-                # 1. Shuffle to ensure random tie-breaking
                 random.shuffle(elig)
-                
-                # 2. Sort by Rec_Count so players with the LEAST marches get priority
                 elig.sort(key=lambda x: x['Rec_Count'])
-                
                 return elig[0]
-            # ---------------------------------------
 
             final = []
             for rd in range(1, 7):
@@ -234,7 +227,13 @@ with st.expander("🛡️ Admin Controls"):
                 random.shuffle(senders)
                 for s in senders:
                     my_pool = on_p if s["Status"] == "Online" else off_p
+                    
+                    # 1. Try to find a target with < 4 marches
                     target = find_t(s, my_pool, 4) 
+                    
+                    # 2. If no one has < 4, fall back to < 5 marches
+                    if not target:
+                        target = find_t(s, my_pool, 5)
                     
                     if target:
                         final.append([s['Username'], s['Status'], target['Username'], target['Status']])
